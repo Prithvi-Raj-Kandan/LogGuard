@@ -1,0 +1,36 @@
+# Core API and schema
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+pydantic-settings
+
+# Environment and configuration
+python-dotenv
+
+# File parsing and extraction (PDF/DOC/TXT/LOG)
+pypdf
+python-docx
+
+# AI integration (Gemini)
+google-generativeai
+
+# Networking and retries
+httpx
+tenacity
+
+# Security and utility helpers
+python-dateutil
+
+# Observability and production readiness
+structlog
+prometheus-client
+
+# Phase 2 advanced controls (rate limiting and streaming)
+slowapi
+sse-starlette
+
+# Testing
+pytest
+pytest-asyncio
+pytest-cov
