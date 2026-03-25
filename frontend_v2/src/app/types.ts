@@ -11,6 +11,7 @@ export interface SecurityWarning {
   severity: 'low' | 'medium' | 'high' | 'critical';
   message: string;
   lineNumbers: number[];
+  redactionHint?: string;
 }
 
 export interface RiskBreakdown {

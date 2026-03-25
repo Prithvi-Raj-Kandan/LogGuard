@@ -3,9 +3,22 @@ import { FileUpload } from './components/FileUpload';
 import { ChatInterface } from './components/ChatInterface';
 import { LogViewer } from './components/LogViewer';
 import { InsightsPanel } from './components/InsightsPanel';
-import { analyzeLogFile, sendChatMessage } from './api';
+import { analyzeLogFile, analyzeLogText, sendChatMessage } from './api';
 import { ChatMessage, AnalysisReport } from './types';
 import { Terminal, FileCode } from 'lucide-react';
+
+function isLikelyLogText(content: string): boolean {
+  const text = content.trim();
+  if (!text) {
+    return false;
+  }
+
+  if (text.includes('\n')) {
+    return true;
+  }
+
+  return /\b(?:GET|POST|PUT|DELETE|PATCH|HTTP\/\d\.\d|\d{3}\s+\d+|\d{1,3}(?:\.\d{1,3}){3})\b/i.test(text);
+}
 
 export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -15,6 +28,7 @@ export default function App() {
 
   const handleFileSelect = async (file: File) => {
     setIsAnalyzing(true);
+    console.info('[workflow] step=frontend_file_selected', { fileName: file.name });
 
     // Add user message
     const userMessage: ChatMessage = {
@@ -29,6 +43,9 @@ export default function App() {
       // Call API to analyze the log file
       const report = await analyzeLogFile(file);
       setCurrentReport(report);
+      console.info('[workflow] step=frontend_report_updated_from_file', {
+        warningCount: report.warnings.length,
+      });
 
       // Add assistant response with report
       const assistantMessage: ChatMessage = {
@@ -55,6 +72,9 @@ export default function App() {
 
   const handleSendMessage = async (content: string) => {
     setIsProcessing(true);
+    console.info('[workflow] step=frontend_chat_message_received', {
+      contentLength: content.length,
+    });
 
     // Add user message
     const userMessage: ChatMessage = {
@@ -66,6 +86,24 @@ export default function App() {
     setMessages((prev) => [...prev, userMessage]);
 
     try {
+      if (isLikelyLogText(content)) {
+        console.info('[workflow] step=frontend_chat_log_analysis_started');
+        const report = await analyzeLogText(content);
+        setCurrentReport(report);
+
+        const assistantMessage: ChatMessage = {
+          id: `msg_${Date.now() + 1}`,
+          role: 'assistant',
+          content: `Analyzed pasted text successfully. Found ${report.warnings.length} warnings across ${report.logs.length} lines. Check the right panel for severity and redaction hints.`,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+        console.info('[workflow] step=frontend_chat_log_analysis_completed', {
+          warningCount: report.warnings.length,
+        });
+        return;
+      }
+
       // Send message to API
       const response = await sendChatMessage(content, currentReport?.id);
 
@@ -77,6 +115,7 @@ export default function App() {
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, assistantMessage]);
+      console.info('[workflow] step=frontend_chat_response_received');
     } catch (error) {
       // Handle error
       const errorMessage: ChatMessage = {
@@ -86,8 +125,10 @@ export default function App() {
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
+      console.error('[workflow] step=frontend_chat_error', error);
     } finally {
       setIsProcessing(false);
+      console.info('[workflow] step=frontend_chat_processing_finished');
     }
   };
 

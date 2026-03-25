@@ -28,6 +28,16 @@ export function ChatInterface({ messages, onSendMessage, isProcessing }: ChatInt
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (input.trim() && !isProcessing) {
+        onSendMessage(input);
+        setInput('');
+      }
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#0d0d0d] rounded-lg border border-[#2a2a2a] overflow-hidden">
       {/* Chat Header */}
@@ -93,13 +103,14 @@ export function ChatInterface({ messages, onSendMessage, isProcessing }: ChatInt
       {/* Input */}
       <form onSubmit={handleSubmit} className="border-t border-[#2a2a2a] p-4">
         <div className="flex gap-2">
-          <input
-            type="text"
+          <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="Ask about the log analysis..."
             disabled={isProcessing}
-            className="flex-1 bg-[#1a1a1a] text-[#e0e0e0] border border-[#2a2a2a] rounded-lg px-4 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#8b5cf6] placeholder:text-[#666] disabled:opacity-50"
+            rows={2}
+            className="flex-1 resize-none bg-[#1a1a1a] text-[#e0e0e0] border border-[#2a2a2a] rounded-lg px-4 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#8b5cf6] placeholder:text-[#666] disabled:opacity-50"
           />
           <button
             type="submit"

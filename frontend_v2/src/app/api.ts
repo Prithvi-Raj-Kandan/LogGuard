@@ -7,6 +7,7 @@ interface BackendFinding {
   risk: BackendRiskLevel;
   line?: number;
   value?: string;
+  redaction_hint?: string;
 }
 
 interface BackendAnalyzeResponse {
@@ -50,6 +51,7 @@ function buildWarnings(findings: BackendFinding[]) {
     severity: finding.risk,
     message: `${finding.type} detected${finding.line ? ` at line ${finding.line}` : ''}`,
     lineNumbers: finding.line ? [finding.line] : [],
+    redactionHint: finding.redaction_hint,
   }));
 }
 
@@ -102,6 +104,12 @@ function severityRank(severity: BackendRiskLevel): number {
  * Response: AnalysisReport
  */
 export async function analyzeLogFile(file: File): Promise<AnalysisReport> {
+  console.info('[workflow] step=frontend_analyze_upload_started', {
+    fileName: file.name,
+    fileSize: file.size,
+    fileType: file.type,
+  });
+
   const formData = new FormData();
   formData.append('file', file);
   formData.append('mask', 'true');
@@ -123,6 +131,11 @@ export async function analyzeLogFile(file: File): Promise<AnalysisReport> {
   }
   
   const backend = (await response.json()) as BackendAnalyzeResponse;
+  console.info('[workflow] step=frontend_analyze_upload_completed', {
+    findings: backend.findings?.length ?? 0,
+    logType: backend.metadata?.log_type,
+    requestId: backend.metadata?.request_id,
+  });
   const fileText = await file.text();
   const findings = backend.findings || [];
 
@@ -137,6 +150,59 @@ export async function analyzeLogFile(file: File): Promise<AnalysisReport> {
     aiSummary:
       backend.insights?.join('\n') ||
       'No AI insights available yet. Upload parsing is connected and operational.',
+  };
+}
+
+export async function analyzeLogText(text: string): Promise<AnalysisReport> {
+  console.info('[workflow] step=frontend_analyze_text_started', {
+    contentLength: text.length,
+  });
+
+  const response = await fetch(`${FASTAPI_BASE_URL}/analyze`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      input_type: 'log',
+      content: text,
+      options: {
+        mask: true,
+        block_high_risk: false,
+        log_analysis: true,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    const message =
+      errorBody?.detail?.message ||
+      errorBody?.detail ||
+      'Failed to analyze pasted log text';
+    throw new Error(message);
+  }
+
+  const backend = (await response.json()) as BackendAnalyzeResponse;
+  const findings = backend.findings || [];
+
+  console.info('[workflow] step=frontend_analyze_text_completed', {
+    findings: findings.length,
+    logType: backend.metadata?.log_type,
+    requestId: backend.metadata?.request_id,
+  });
+
+  return {
+    id: `report_${Date.now()}`,
+    fileName: backend.metadata?.file_name || 'pasted_log_text',
+    timestamp: new Date().toISOString(),
+    summary: backend.summary,
+    logs: buildLogLinesFromText(text, findings),
+    warnings: buildWarnings(findings),
+    riskBreakdown: buildRiskBreakdown(findings),
+    aiSummary:
+      backend.insights?.join('\n') ||
+      'No AI insights available yet. Text parsing is connected and operational.',
   };
 }
 

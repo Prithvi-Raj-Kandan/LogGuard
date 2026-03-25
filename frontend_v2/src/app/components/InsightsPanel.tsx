@@ -103,6 +103,11 @@ export function InsightsPanel({ report }: InsightsPanelProps) {
               <p className="text-[#a0a0a0] font-mono text-sm mb-2">
                 {warning.message}
               </p>
+              {warning.redactionHint && (
+                <p className="text-xs text-[#9ca3af] font-mono mb-2">
+                  Redaction: {warning.redactionHint}
+                </p>
+              )}
               <div className="flex items-center gap-2 text-xs text-[#666] font-mono">
                 <span>Lines:</span>
                 {warning.lineNumbers.map((lineNum, idx) => (

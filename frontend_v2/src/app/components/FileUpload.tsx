@@ -9,6 +9,12 @@ interface FileUploadProps {
 export function FileUpload({ onFileSelect, isAnalyzing }: FileUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const allowedExtensions = ['.log', '.txt', '.pdf', '.doc', '.docx'];
+
+  const isAcceptedFile = (file: File) => {
+    const lowerName = file.name.toLowerCase();
+    return allowedExtensions.some((ext) => lowerName.endsWith(ext));
+  };
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -25,9 +31,7 @@ export function FileUpload({ onFileSelect, isAnalyzing }: FileUploadProps) {
     setIsDragging(false);
 
     const files = Array.from(e.dataTransfer.files);
-    const logFile = files.find(file => 
-      file.name.endsWith('.log') || file.name.endsWith('.txt')
-    );
+    const logFile = files.find((file) => isAcceptedFile(file));
 
     if (logFile) {
       setSelectedFile(logFile);
@@ -37,7 +41,7 @@ export function FileUpload({ onFileSelect, isAnalyzing }: FileUploadProps) {
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (file && isAcceptedFile(file)) {
       setSelectedFile(file);
       onFileSelect(file);
     }
@@ -89,12 +93,12 @@ export function FileUpload({ onFileSelect, isAnalyzing }: FileUploadProps) {
               Drag & drop your log file here
             </p>
             <p className="text-sm text-[#888] mb-4 font-mono">
-              Supports .log and .txt files
+              Supports .log, .txt, .pdf, .doc and .docx files
             </p>
             <label className="inline-block">
               <input
                 type="file"
-                accept=".log,.txt"
+                accept="*/*"
                 onChange={handleFileChange}
                 className="hidden"
                 disabled={isAnalyzing}
