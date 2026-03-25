@@ -12,6 +12,7 @@
 - Keep each important capability in a separate ticket.
 - Keep response contracts stable early to avoid integration churn.
 - Build test fixtures in parallel with each module, not at the end.
+- For every executed ticket, update LG-110 evaluation artifacts in parallel.
 - Use feature flags for advanced or risky behavior.
 
 ## Global Workflow
@@ -334,6 +335,45 @@ Workflow and dependencies:
 
 ---
 
+### LG-110: Evaluation Framework
+
+Description:
+- Build a measurable evaluation pipeline to verify pattern detection quality and prevent regressions.
+
+Files to create or update:
+- backend/tests/test_patterns.py
+- backend/tests/fixtures/
+- backend/tests/test_evaluation_metrics.py
+- backend/patterns.py
+
+Execution steps:
+1. Build fixture sets for true positives, false positives, and mixed realistic logs.
+2. Define expected labels per fixture: pattern type, line number, and risk level.
+3. Implement evaluation helpers to compute precision, recall, false positives, and false negatives per pattern.
+4. Add threshold assertions for critical and high-risk pattern quality.
+5. Add line-number accuracy checks for labeled fixtures.
+6. Integrate the evaluation suite into the default backend test run.
+
+Done when:
+- Detection quality metrics are computed automatically and validated against thresholds.
+- Any regression in pattern quality fails tests.
+
+Critical points:
+- Include web-access-log fixtures to control phone/token false positives.
+- Keep fixtures versioned and deterministic so quality trends remain comparable.
+
+Tests:
+- Per-pattern precision/recall tests.
+- False-positive control tests on benign access logs.
+- Labeled line-number accuracy tests.
+
+Workflow and dependencies:
+- Depends on LG-103.
+- Runs in parallel with LG-104 and LG-106.
+- Must complete before LG-10x.
+
+---
+
 ### LG-10x: Phase 1 Quality Gate and Demo Readiness
 
 Description:
@@ -360,7 +400,7 @@ Tests:
 - Repeatability check for risk scoring.
 
 Workflow and dependencies:
-- Depends on LG-101 through LG-109.
+- Depends on LG-101 through LG-110.
 
 ## Phase 2: Advanced Challenges
 
@@ -600,7 +640,7 @@ Workflow and dependencies:
 3. LG-103 plus LG-104 unlock LG-105 and LG-106.
 4. LG-102 plus LG-103 plus LG-104 plus LG-105 plus LG-106 unlock LG-107.
 5. LG-107 unlocks LG-108.
-6. LG-108 and LG-109 both must complete before LG-10x.
+6. LG-108, LG-109, and LG-110 must complete before LG-10x.
 7. LG-10x gates all LG-20x series work.
 
 ## Quality Gates
