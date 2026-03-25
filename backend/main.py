@@ -8,8 +8,10 @@ from pydantic import BaseModel, Field
 
 try:
     from backend.parser import ParserError, normalize_input
+    from backend.patterns import detect_patterns_in_lines, identify_log_type
 except ImportError:  # pragma: no cover - fallback for local execution from backend/
     from parser import ParserError, normalize_input
+    from patterns import detect_patterns_in_lines, identify_log_type
 
 
 class AnalyzeOptions(BaseModel):
@@ -57,16 +59,19 @@ def analyze(payload: AnalyzeRequest) -> dict:
     except ParserError as exc:
         raise HTTPException(status_code=400, detail={"code": exc.code, "message": str(exc)}) from exc
 
+    findings = detect_patterns_in_lines(normalized.get("lines", []))
+    log_profile = identify_log_type(normalized.get("text", ""))
+
     return {
-        "summary": "LG-101 scaffold response. Analysis pipeline not implemented yet.",
+        "summary": "LG-103 detection response.",
         "content_type": normalized["content_type"],
-        "findings": [],
+        "findings": findings,
         "risk_score": 0,
         "risk_level": "low",
         "action": "none",
         "insights": [
-            "Endpoint and contracts are in place.",
-            "Pipeline modules are scaffolded for LG-102 onward.",
+            "Pattern detection is active.",
+            f"Detected log type: {log_profile['log_type']} (confidence {log_profile['confidence']}).",
         ],
         "metadata": {
             "normalized_preview": normalized["text"][:80],
@@ -74,6 +79,9 @@ def analyze(payload: AnalyzeRequest) -> dict:
             "line_count": normalized["metadata"].get("line_count", 0),
             "chunk_count": normalized["metadata"].get("chunk_count", 0),
             "warnings": normalized.get("warnings", []),
+            "log_type": log_profile.get("log_type", "unknown"),
+            "log_sub_type": log_profile.get("log_sub_type", "unknown"),
+            "log_profile": log_profile,
         },
     }
 
@@ -117,16 +125,19 @@ async def analyze_upload(
     except ParserError as exc:
         raise HTTPException(status_code=400, detail={"code": exc.code, "message": str(exc)}) from exc
 
+    findings = detect_patterns_in_lines(normalized.get("lines", []))
+    log_profile = identify_log_type(normalized.get("text", ""))
+
     return {
-        "summary": "LG-102 parser response via file upload endpoint.",
+        "summary": "LG-103 detection response via file upload endpoint.",
         "content_type": normalized["content_type"],
-        "findings": [],
+        "findings": findings,
         "risk_score": 0,
         "risk_level": "low",
         "action": "none",
         "insights": [
-            "File upload has been parsed and normalized.",
-            "Detection/risk/policy engines will be wired in later tickets.",
+            "File upload has been parsed and pattern detection is active.",
+            f"Detected log type: {log_profile['log_type']} (confidence {log_profile['confidence']}).",
         ],
         "metadata": {
             "file_name": normalized["metadata"].get("file_name"),
@@ -135,5 +146,8 @@ async def analyze_upload(
             "chunk_count": normalized["metadata"].get("chunk_count", 0),
             "warnings": normalized.get("warnings", []),
             "options": options,
+            "log_type": log_profile.get("log_type", "unknown"),
+            "log_sub_type": log_profile.get("log_sub_type", "unknown"),
+            "log_profile": log_profile,
         },
     }
