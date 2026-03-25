@@ -1,6 +1,6 @@
 {
   "dataset": "gold_logs_1000",
-  "version": 1,
+  "version": 2,
   "expected_log_type": "web_server_access",
   "expected_log_sub_type": "nginx_apache_access",
   "expected_findings": [
@@ -23,5 +23,16 @@
     "overall_precision_min": 0.92,
     "overall_recall_min": 1.0,
     "max_false_positives": 1
+  },
+  "expected_summary": {
+    "line_count": 1000,
+    "total_findings": 14,
+    "unique_lines_affected": 12,
+    "by_severity": {
+      "critical": 3,
+      "high": 4,
+      "medium": 3,
+      "low": 4
+    }
   }
 }
