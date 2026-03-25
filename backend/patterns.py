@@ -1,5 +1,9 @@
+import logging
 import re
 from typing import Any, Iterable
+
+
+logger = logging.getLogger("logguard.workflow")
 
 
 RISK_LEVELS: dict[str, str] = {
@@ -164,6 +168,7 @@ LOG_TYPE_RULES: list[dict[str, Any]] = [
 
 def _scan_patterns(lines: Iterable[tuple[int, str]]) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
+    per_type_counts: dict[str, int] = {}
 
     for line_number, line_text in lines:
         for definition in PATTERN_DEFINITIONS:
@@ -183,27 +188,44 @@ def _scan_patterns(lines: Iterable[tuple[int, str]]) -> list[dict[str, Any]]:
                         "line": line_number,
                     }
                 )
+                pattern_type = str(definition["type"])
+                per_type_counts[pattern_type] = per_type_counts.get(pattern_type, 0) + 1
+
+    logger.info(
+        "workflow=patterns step=scan_completed findings=%d distinct_types=%d counts=%s",
+        len(findings),
+        len(per_type_counts),
+        per_type_counts,
+    )
 
     return findings
 
 
 def detect_patterns(text: str) -> list[dict[str, Any]]:
     lines = text.splitlines() or [text]
+    logger.info("workflow=patterns step=detect_patterns_started line_count=%d", len(lines))
     indexed = [(index + 1, line) for index, line in enumerate(lines)]
-    return _scan_patterns(indexed)
+    findings = _scan_patterns(indexed)
+    logger.info("workflow=patterns step=detect_patterns_completed findings=%d", len(findings))
+    return findings
 
 
 def detect_patterns_in_lines(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    logger.info("workflow=patterns step=detect_patterns_in_lines_started line_count=%d", len(lines))
     indexed = [
         (int(line.get("line_number", index + 1)), str(line.get("text", "")))
         for index, line in enumerate(lines)
     ]
-    return _scan_patterns(indexed)
+    findings = _scan_patterns(indexed)
+    logger.info("workflow=patterns step=detect_patterns_in_lines_completed findings=%d", len(findings))
+    return findings
 
 
 def identify_log_type(text: str) -> dict[str, Any]:
     lines = text.splitlines()
+    logger.info("workflow=patterns step=identify_log_type_started line_count=%d", len(lines))
     if not lines:
+        logger.info("workflow=patterns step=identify_log_type_completed log_type=unknown confidence=0.00")
         return {
             "log_type": "unknown",
             "log_sub_type": "unknown",
@@ -235,6 +257,7 @@ def identify_log_type(text: str) -> dict[str, Any]:
 
     confidence = round(min(1.0, best_score / max(1, len(lines) * 0.2)), 2)
     if best_score == 0:
+        logger.info("workflow=patterns step=identify_log_type_completed log_type=unknown confidence=0.00")
         return {
             "log_type": "unknown",
             "log_sub_type": "unknown",
@@ -242,6 +265,12 @@ def identify_log_type(text: str) -> dict[str, Any]:
             "evidence_lines": [],
         }
 
+    logger.info(
+        "workflow=patterns step=identify_log_type_completed log_type=%s log_sub_type=%s confidence=%.2f",
+        best_type,
+        best_sub_type,
+        confidence,
+    )
     return {
         "log_type": best_type,
         "log_sub_type": best_sub_type,

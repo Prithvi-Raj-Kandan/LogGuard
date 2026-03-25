@@ -20,14 +20,22 @@ interface BackendAnalyzeResponse {
   insights: string[];
   metadata?: {
     file_name?: string;
+    file_suffix?: string;
     line_count?: number;
     chunk_count?: number;
     warnings?: string[];
+    log_type?: string;
+    log_sub_type?: string;
+    request_id?: string;
+    processing_time_ms?: number;
   };
 }
 
-const FASTAPI_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL?.trim() || 'http://localhost:8000';
+const viteEnv = (import.meta as ImportMeta & {
+  env?: Record<string, string | undefined>;
+}).env;
+
+const FASTAPI_BASE_URL = viteEnv?.VITE_API_BASE_URL?.trim() || 'http://localhost:8000';
 
 function buildRiskBreakdown(findings: BackendFinding[]) {
   return findings.reduce(

@@ -1,5 +1,6 @@
 import base64
 import json
+import logging
 import re
 from io import BytesIO
 from pathlib import Path
@@ -7,6 +8,9 @@ from typing import Any, Literal, TypedDict
 
 from docx import Document
 from pypdf import PdfReader
+
+
+logger = logging.getLogger("logguard.workflow")
 
 
 class ParserError(ValueError):
@@ -119,6 +123,7 @@ def _extract_file_text(file_payload: FilePayload) -> tuple[str, str, list[str], 
 	warnings: list[str] = []
 	file_name = file_payload.get("file_name", "uploaded_file")
 	suffix = Path(file_name).suffix.lower()
+	logger.info("workflow=parser step=file_extract_started file_name=%s suffix=%s", file_name, suffix or "unknown")
 	metadata: dict[str, Any] = {
 		"file_name": file_name,
 		"mime_type": file_payload.get("mime_type"),
@@ -129,6 +134,7 @@ def _extract_file_text(file_payload: FilePayload) -> tuple[str, str, list[str], 
 		text = str(file_payload["text"]).strip()
 		content_type = "logs" if suffix == ".log" else "file"
 		metadata["extraction_method"] = "inline_text"
+		logger.info("workflow=parser step=file_extract_completed method=inline_text content_type=%s", content_type)
 		return text, content_type, warnings, metadata
 
 	content_base64 = file_payload.get("content_base64")
@@ -150,16 +156,19 @@ def _extract_file_text(file_payload: FilePayload) -> tuple[str, str, list[str], 
 
 		content_type = "logs" if suffix == ".log" else "file"
 		metadata["extraction_method"] = "text_decode"
+		logger.info("workflow=parser step=file_extract_completed method=text_decode content_type=%s", content_type)
 		return text.strip(), content_type, warnings, metadata
 
 	if suffix == ".pdf":
 		text = _extract_text_from_pdf(file_bytes)
 		metadata["extraction_method"] = "pypdf"
+		logger.info("workflow=parser step=file_extract_completed method=pypdf")
 		return text, "file", warnings, metadata
 
 	if suffix == ".docx":
 		text = _extract_text_from_docx(file_bytes)
 		metadata["extraction_method"] = "python-docx"
+		logger.info("workflow=parser step=file_extract_completed method=python-docx")
 		return text, "file", warnings, metadata
 
 	if suffix == ".doc":
@@ -168,6 +177,7 @@ def _extract_file_text(file_payload: FilePayload) -> tuple[str, str, list[str], 
 			text = _extract_text_from_docx(file_bytes)
 			metadata["extraction_method"] = "python-docx"
 			warnings.append("legacy_doc_parsed_via_docx_compat")
+			logger.info("workflow=parser step=file_extract_completed method=python-docx_compat")
 			return text, "file", warnings, metadata
 		except ParserError:
 			text = _extract_best_effort_text(file_bytes)
@@ -178,6 +188,7 @@ def _extract_file_text(file_payload: FilePayload) -> tuple[str, str, list[str], 
 				)
 			metadata["extraction_method"] = "legacy_doc_fallback"
 			warnings.append("legacy_doc_best_effort_parse")
+			logger.info("workflow=parser step=file_extract_completed method=legacy_doc_fallback")
 			return text, "file", warnings, metadata
 
 	raise ParserError("unsupported_file_type", f"unsupported file extension: {suffix or 'unknown'}")
@@ -220,6 +231,8 @@ def normalize_input(
 	if not content:
 		raise ParserError("empty_content", "input content cannot be empty")
 
+	logger.info("workflow=parser step=normalize_input_started input_type=%s content_length=%d", input_type, len(content))
+
 	warnings: list[str] = []
 	metadata: dict[str, Any] = {"chunk_size": chunk_size, "input_type": input_type}
 
@@ -238,6 +251,14 @@ def normalize_input(
 
 	metadata["line_count"] = len(lines)
 	metadata["chunk_count"] = len(chunks)
+	logger.info(
+		"workflow=parser step=normalize_input_completed input_type=%s content_type=%s line_count=%d chunk_count=%d warnings=%d",
+		input_type,
+		normalized_type,
+		len(lines),
+		len(chunks),
+		len(warnings),
+	)
 
 	return {
 		"content_type": normalized_type,
