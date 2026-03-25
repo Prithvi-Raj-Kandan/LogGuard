@@ -1,5 +1,6 @@
 import base64
 import json
+import re
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Literal, TypedDict
@@ -104,6 +105,16 @@ def _extract_text_from_docx(file_bytes: bytes) -> str:
 	return "\n".join(paragraph.text for paragraph in doc.paragraphs).strip()
 
 
+def _extract_best_effort_text(file_bytes: bytes) -> str:
+	"""
+	Fallback extractor for legacy binary formats where structured parsers are unavailable.
+	Extracts readable text sequences and preserves line-style output where possible.
+	"""
+	decoded = file_bytes.decode("latin-1", errors="ignore")
+	segments = re.findall(r"[\x20-\x7E]{4,}", decoded)
+	return "\n".join(segment.strip() for segment in segments if segment.strip()).strip()
+
+
 def _extract_file_text(file_payload: FilePayload) -> tuple[str, str, list[str], dict[str, Any]]:
 	warnings: list[str] = []
 	file_name = file_payload.get("file_name", "uploaded_file")
@@ -146,12 +157,28 @@ def _extract_file_text(file_payload: FilePayload) -> tuple[str, str, list[str], 
 		metadata["extraction_method"] = "pypdf"
 		return text, "file", warnings, metadata
 
-	if suffix in {".docx", ".doc"}:
-		if suffix == ".doc":
-			warnings.append("legacy_doc_best_effort_parse")
+	if suffix == ".docx":
 		text = _extract_text_from_docx(file_bytes)
 		metadata["extraction_method"] = "python-docx"
 		return text, "file", warnings, metadata
+
+	if suffix == ".doc":
+		# Legacy .doc files are not reliably supported by python-docx.
+		try:
+			text = _extract_text_from_docx(file_bytes)
+			metadata["extraction_method"] = "python-docx"
+			warnings.append("legacy_doc_parsed_via_docx_compat")
+			return text, "file", warnings, metadata
+		except ParserError:
+			text = _extract_best_effort_text(file_bytes)
+			if not text:
+				raise ParserError(
+					"doc_parse_error",
+					"unable to parse legacy DOC file; provide TXT, DOCX, or PDF",
+				)
+			metadata["extraction_method"] = "legacy_doc_fallback"
+			warnings.append("legacy_doc_best_effort_parse")
+			return text, "file", warnings, metadata
 
 	raise ParserError("unsupported_file_type", f"unsupported file extension: {suffix or 'unknown'}")
 
