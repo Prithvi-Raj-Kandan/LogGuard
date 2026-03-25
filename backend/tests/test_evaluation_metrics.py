@@ -6,6 +6,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from backend.log_analyzer import analyze_log_lines
 from backend.patterns import detect_patterns, identify_log_type
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -74,3 +75,15 @@ def test_gold_dataset_log_type_classification() -> None:
     assert profile["log_type"] == labels["expected_log_type"]
     assert profile["log_sub_type"] == labels["expected_log_sub_type"]
     assert profile["confidence"] > 0
+
+
+def test_gold_dataset_log_analyzer_summary() -> None:
+    text, labels = _load_gold()
+    expected = labels["expected_summary"]
+
+    result = analyze_log_lines(text)
+
+    assert result["line_count"] == expected["line_count"]
+    assert result["summary"]["total_findings"] == expected["total_findings"]
+    assert result["summary"]["unique_lines_affected"] == expected["unique_lines_affected"]
+    assert result["grouped_findings"]["by_severity"] == expected["by_severity"]
