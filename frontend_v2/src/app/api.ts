@@ -1,4 +1,4 @@
-import { AnalysisReport } from './types';
+import { AnalysisReport, ChatMessage } from './types';
 
 type BackendRiskLevel = 'low' | 'medium' | 'high' | 'critical';
 
@@ -224,45 +224,108 @@ export async function analyzeLogText(text: string): Promise<AnalysisReport> {
  * 
  * Response: { response: string }
  */
-export async function sendChatMessage(message: string, reportId?: string): Promise<string> {
-  // PRODUCTION: Uncomment this code to connect to your FastAPI backend
-  /*
-  const response = await fetch(`${FASTAPI_BASE_URL}/api/chat`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ message, reportId }),
-  });
-  
-  if (!response.ok) {
-    throw new Error('Failed to send chat message');
-  }
-  
-  const data = await response.json();
-  return data.response;
-  */
+export async function sendChatMessage(
+  message: string,
+  reportId?: string,
+  report?: AnalysisReport | null,
+  history: ChatMessage[] = []
+): Promise<string> {
+  try {
+    const response = await fetch(`${FASTAPI_BASE_URL}/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message,
+        report_id: reportId,
+        report,
+      }),
+    });
 
-  // Backend chat endpoint is not implemented yet.
-  // Keep this fallback until LG chat integration ticket is completed.
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve(generateMockChatResponse(message));
-    }, 1000);
-  });
+    if (!response.ok) {
+      throw new Error('Failed to send chat message');
+    }
+
+    const data = (await response.json()) as { response?: string };
+    if (data.response?.trim()) {
+      return data.response;
+    }
+    throw new Error('Invalid chat response payload');
+  } catch (error) {
+    console.warn('[workflow] step=frontend_chat_fallback_due_to_error', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return generateContextualChatResponse(message, report, history);
+  }
 }
 
 // ============================================================================
-// MOCK DATA GENERATION (Remove when connecting to real backend)
+// CONTEXTUAL FALLBACK CHAT (Remove when connecting to real backend)
 // ============================================================================
 
-function generateMockChatResponse(message: string): string {
-  const responses = [
-    "I've analyzed your log file. The main concerns are related to credential exposure and SQL injection attempts. Would you like me to explain any specific warning?",
-    "Based on the log analysis, I recommend prioritizing the critical security warnings first, particularly the default credentials and SQL injection vulnerabilities.",
-    "The authentication failures on line 5 indicate potential brute force attempts. Consider implementing rate limiting or IP-based blocking.",
-    "Looking at the risk breakdown, you have 2 critical issues that need immediate attention. I can provide detailed remediation steps if needed.",
-  ];
-  
-  return responses[Math.floor(Math.random() * responses.length)];
+function generateContextualChatResponse(
+  message: string,
+  report?: AnalysisReport | null,
+  history: ChatMessage[] = []
+): string {
+  const query = message.toLowerCase();
+
+  if (!report) {
+    return 'I do not have an analysis report in context yet. Upload a log file or paste log text first.';
+  }
+
+  const warnings = report.warnings || [];
+  const criticalWarnings = warnings.filter((item) => item.severity === 'critical');
+  const highWarnings = warnings.filter((item) => item.severity === 'high');
+  const orderedWarnings = [...criticalWarnings, ...highWarnings, ...warnings.filter((item) => item.severity !== 'critical' && item.severity !== 'high')];
+
+  const previousAssistant = [...history]
+    .reverse()
+    .find((item) => item.role === 'assistant' && item.content);
+
+  if (warnings.length === 0) {
+    return 'This report has no detected sensitive warnings, so there is no critical breach to prioritize.';
+  }
+
+  if (query.includes('most critical') || query.includes('critical security breach') || query.includes('highest risk')) {
+    const top = orderedWarnings[0];
+    return `The highest-risk finding is ${top.type} (${top.severity})${top.lineNumbers.length ? ` at line ${top.lineNumbers.join(', ')}` : ''}. Prioritize secret rotation and immediate redaction for this data.`;
+  }
+
+  if (query.includes('3 critical') || query.includes('three critical') || query.includes('top 3')) {
+    const topThree = orderedWarnings.slice(0, 3);
+    const lines = topThree.map((item, index) => {
+      const lineRef = item.lineNumbers.length ? `line ${item.lineNumbers.join(', ')}` : 'line unknown';
+      const hint = item.redactionHint ? ` Redaction: ${item.redactionHint}.` : '';
+      return `${index + 1}. ${item.type} (${item.severity}) on ${lineRef}.${hint}`;
+    });
+    return `Top 3 highest-priority warnings:\n${lines.join('\n')}`;
+  }
+
+  const requestedLine = query.match(/line\s+(\d+)/);
+  if (requestedLine) {
+    const lineNumber = Number(requestedLine[1]);
+    const lineWarnings = warnings.filter((item) => item.lineNumbers.includes(lineNumber));
+    if (!lineWarnings.length) {
+      return `No warning is currently mapped to line ${lineNumber} in this report.`;
+    }
+
+    const details = lineWarnings
+      .map((item) => `${item.type} (${item.severity})${item.redactionHint ? `, redaction ${item.redactionHint}` : ''}`)
+      .join('; ');
+    return `Line ${lineNumber} includes: ${details}.`;
+  }
+
+  if (query.includes('summary') || query.includes('overview') || query.includes('risk breakdown')) {
+    const rb = report.riskBreakdown;
+    return `Risk summary for ${report.fileName}: critical=${rb.critical}, high=${rb.high}, medium=${rb.medium}, low=${rb.low}. Total warnings=${warnings.length}.`;
+  }
+
+  if (query.includes('why') && previousAssistant) {
+    return `Using the current report context, I prioritized by severity and line evidence. ${previousAssistant.content}`;
+  }
+
+  const first = orderedWarnings[0];
+  return `I am using the current report context. Start with ${first.type} (${first.severity})${first.lineNumbers.length ? ` at line ${first.lineNumbers.join(', ')}` : ''}, then I can walk through each warning in order.`;
 }

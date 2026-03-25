@@ -1,7 +1,10 @@
 import logging
 from typing import Any
 
-from backend.patterns import identify_log_type, detect_patterns_in_lines
+try:
+    from backend.patterns import identify_log_type, detect_patterns_in_lines
+except ImportError:  # pragma: no cover - fallback for local execution from backend/
+    from patterns import identify_log_type, detect_patterns_in_lines
 
 
 logger = logging.getLogger("logguard.workflow")
