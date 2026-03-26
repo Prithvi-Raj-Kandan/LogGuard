@@ -230,6 +230,11 @@ export async function sendChatMessage(
   report?: AnalysisReport | null,
   history: ChatMessage[] = []
 ): Promise<string> {
+  const compactHistory = history.slice(-10).map((item) => ({
+    role: item.role,
+    content: item.content,
+  }));
+
   try {
     const response = await fetch(`${FASTAPI_BASE_URL}/chat`, {
       method: 'POST',
@@ -240,6 +245,7 @@ export async function sendChatMessage(
         message,
         report_id: reportId,
         report,
+        history: compactHistory,
       }),
     });
 

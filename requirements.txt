@@ -13,7 +13,7 @@ pypdf
 python-docx
 
 # AI integration (Gemini)
-google-generativeai
+google-genai
 
 # Networking and retries
 httpx
