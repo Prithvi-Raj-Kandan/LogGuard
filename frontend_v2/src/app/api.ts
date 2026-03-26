@@ -17,6 +17,7 @@ interface BackendAnalyzeResponse {
   risk_score: number;
   risk_level: BackendRiskLevel;
   action: string;
+  processed_content?: string;
   insights: string[];
   metadata?: {
     file_name?: string;
@@ -64,6 +65,10 @@ function buildWarnings(findings: BackendFinding[]) {
 }
 
 function buildLogLinesFromText(fileText: string, findings: BackendFinding[]) {
+  if (!fileText) {
+    return [];
+  }
+
   const riskyLineMap = new Map<number, BackendRiskLevel>();
   findings.forEach((finding) => {
     if (!finding.line) {
@@ -85,6 +90,19 @@ function buildLogLinesFromText(fileText: string, findings: BackendFinding[]) {
       riskLevel,
     };
   });
+}
+
+function resolveDisplayText(backend: BackendAnalyzeResponse, fallbackText: string): string {
+  if (backend.action === 'blocked') {
+    return '';
+  }
+
+  const processed = backend.processed_content?.trim();
+  if (processed) {
+    return processed;
+  }
+
+  return fallbackText;
 }
 
 function severityRank(severity: BackendRiskLevel): number {
@@ -145,6 +163,7 @@ export async function analyzeLogFile(file: File): Promise<AnalysisReport> {
     requestId: backend.metadata?.request_id,
   });
   const fileText = await file.text();
+  const displayText = resolveDisplayText(backend, fileText);
   const findings = backend.findings || [];
 
   return {
@@ -152,7 +171,7 @@ export async function analyzeLogFile(file: File): Promise<AnalysisReport> {
     fileName: backend.metadata?.file_name || file.name,
     timestamp: new Date().toISOString(),
     summary: backend.summary,
-    logs: buildLogLinesFromText(fileText, findings),
+    logs: buildLogLinesFromText(displayText, findings),
     warnings: buildWarnings(findings),
     riskBreakdown: buildRiskBreakdown(findings),
     aiSummary:
@@ -192,6 +211,7 @@ export async function analyzeLogText(text: string): Promise<AnalysisReport> {
   }
 
   const backend = (await response.json()) as BackendAnalyzeResponse;
+  const displayText = resolveDisplayText(backend, text);
   const findings = backend.findings || [];
 
   console.info('[workflow] step=frontend_analyze_text_completed', {
@@ -205,7 +225,7 @@ export async function analyzeLogText(text: string): Promise<AnalysisReport> {
     fileName: backend.metadata?.file_name || 'pasted_log_text',
     timestamp: new Date().toISOString(),
     summary: backend.summary,
-    logs: buildLogLinesFromText(text, findings),
+    logs: buildLogLinesFromText(displayText, findings),
     warnings: buildWarnings(findings),
     riskBreakdown: buildRiskBreakdown(findings),
     aiSummary:
