@@ -2,43 +2,38 @@
 
 AI Secure Data Intelligence Platform for log ingestion, detection, analysis, risk scoring, policy enforcement, and AI-assisted security insights.
 
-## Current Status
+## Features
 
-Phase 1 core workflow is implemented:
-
-- Multi-input normalization (text, file, sql, chat, log)
-- Sensitive pattern detection with risk labels and redaction hints
-- Line-aware log analysis with grouped findings and log-type classification
-- Gemini-powered AI summary and chat responses with graceful fallback
-- Risk scoring and policy application (masking + optional blocking)
-- Frontend upload, chat, log viewer, and insights experience
+- Multi-input ingestion and normalization for text, file, sql, chat, and log payloads
+- File parsing support for txt, log, pdf, docx, and legacy doc fallback extraction
+- Structured parser metadata including line counts, chunk counts, extraction method, and warnings
+- Regex-based sensitive data detection with line references and confidence values
+- Detection coverage for emails, phone numbers, passwords, API keys, bearer tokens, JWTs, private keys, AWS keys, connection strings, stack traces, internal IPs, and hostnames
+- Deterministic risk labels and redaction hints per detected pattern
+- Log-type classification (web access, web error, linux syslog, application JSON, database, container/kubernetes)
+- Line-by-line log analyzer with evidence snippets and grouped summaries by type and severity
+- Weighted risk scoring engine with risk level classification and severity breakdown
+- Policy engine for masking sensitive values using redaction rules
+- Optional high-risk blocking action when policy mode enables block_high_risk
+- AI summary generation using Gemini based on analyzer context and metadata
+- AI chat assistant endpoint using report context plus recent chat history
+- Graceful non-AI fallback behavior when Gemini configuration is missing or unavailable
+- Backend workflow logging for major processing stages and request tracing
+- FastAPI endpoints for health checks, text analyze, upload analyze, and chat
+- Frontend upload flow for log files and pasted text analysis
+- Interactive log viewer with severity-aware highlighting support
+- Unified Security Warnings panel grouped by severity with expandable sections
+- Risk visualization integrated into warning severity buckets
+- AI Summary panel with scrollable long-form output rendering
+- Frontend handling of policy-processed content so masked/blocked output is reflected in displayed logs
+- Automated backend test coverage for parser, patterns, log analyzer, AI insights, risk/policy behavior, and evaluation metrics
+- Gold dataset evaluation tests for precision/recall thresholds and line-level detection quality
 
 ## Architecture
 
 Pipeline:
 
 Input -> Parser -> Pattern Detection -> Log Analyzer -> Risk Engine -> Policy Engine -> AI Insights -> Response
-
-Core backend modules:
-
-- backend/parser.py
-- backend/patterns.py
-- backend/log_analyzer.py
-- backend/risk_engine.py
-- backend/policy_engine.py
-- backend/ai_insights.py
-- backend/main.py
-
-Frontend app:
-
-- frontend_v2/src/app
-
-## API Endpoints
-
-- GET /health
-- POST /analyze
-- POST /analyze/upload
-- POST /chat
 
 ## Environment Setup
 
@@ -91,12 +86,3 @@ Targeted evaluation suite:
 python -m pytest test_evaluation_metrics.py test_patterns.py test_parser.py -q
 ```
 
-## Policy Behavior
-
-- mask=true: sensitive matches are transformed in processed_content
-- block_high_risk=true: high/critical results can return action=blocked
-- Frontend now renders processed policy output (masked/blocked) in log display
-
-## Important Note On Plan Alignment
-
-The plan specifies Phase 1 as mask-and-warn (no blocking). Current code supports optional blocking behind block_high_risk. Keep block_high_risk=false to align strictly with that Phase 1 policy decision.
