@@ -3,11 +3,18 @@ import json
 import logging
 import time
 import uuid
+from pathlib import Path
 from typing import Any, Literal
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+load_dotenv(ROOT_DIR / ".env")
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 
 logger = logging.getLogger("logguard.workflow")
@@ -22,9 +29,13 @@ if not logger.handlers:
 logger.setLevel(logging.INFO)
 
 try:
+    from backend.ai_insights import generate_chat_response, generate_insights
+    from backend.log_analyzer import analyze_log_lines
     from backend.parser import ParserError, normalize_input
     from backend.patterns import detect_patterns_in_lines, identify_log_type
 except ImportError:  # pragma: no cover - fallback for local execution from backend/
+    from ai_insights import generate_chat_response, generate_insights
+    from log_analyzer import analyze_log_lines
     from parser import ParserError, normalize_input
     from patterns import detect_patterns_in_lines, identify_log_type
 
@@ -41,6 +52,13 @@ class AnalyzeRequest(BaseModel):
     )
     content: str = Field(min_length=1, description="Raw payload content.")
     options: AnalyzeOptions = Field(default_factory=AnalyzeOptions)
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1)
+    report_id: str | None = None
+    report: dict[str, Any] | None = None
+    history: list[dict[str, str]] | None = None
 
 
 app = FastAPI(
@@ -62,6 +80,20 @@ app.add_middleware(
 def health() -> dict[str, str]:
     logger.info("workflow=health_check step=completed")
     return {"status": "ok", "service": "logguard-backend"}
+
+
+@app.post("/chat")
+def chat(payload: ChatRequest) -> dict[str, str]:
+    logger.info(
+        "workflow=chat step=request_received message_length=%d has_report=%s report_id=%s history_count=%d",
+        len(payload.message),
+        bool(payload.report),
+        payload.report_id or "none",
+        len(payload.history or []),
+    )
+    response = generate_chat_response(payload.message, payload.report, payload.history)
+    logger.info("workflow=chat step=response_ready response_length=%d", len(response))
+    return {"response": response}
 
 
 @app.post("/analyze")
@@ -115,6 +147,44 @@ def analyze(payload: AnalyzeRequest) -> dict:
         float(log_profile.get("confidence", 0.0)),
     )
 
+    analyzer_result: dict[str, Any] | None = None
+    if payload.options.log_analysis:
+        logger.info("workflow=analyze request_id=%s step=log_analyzer_started", request_id)
+        analyzer_result = analyze_log_lines(normalized.get("text", ""))
+        findings = analyzer_result.get("findings", findings)
+        log_profile = analyzer_result.get("log_profile", log_profile)
+        logger.info(
+            "workflow=analyze request_id=%s step=log_analyzer_completed findings=%d",
+            request_id,
+            len(findings),
+        )
+
+    logger.info("workflow=analyze request_id=%s step=ai_insights_started", request_id)
+    analyzer_context = analyzer_result or {
+        "line_count": normalized["metadata"].get("line_count", 0),
+        "findings": findings,
+        "grouped_findings": {},
+        "log_profile": log_profile,
+        "summary": {
+            "total_findings": len(findings),
+            "unique_lines_affected": len({int(item.get("line", 0)) for item in findings if int(item.get("line", 0)) > 0}),
+        },
+    }
+    insights = generate_insights(
+        {
+            "request_id": request_id,
+            "content_type": normalized["content_type"],
+            "analyzer": analyzer_context,
+        }
+    )
+    logger.info(
+        "workflow=analyze request_id=%s step=ai_insights_completed insights=%d",
+        request_id,
+        len(insights),
+    )
+    if insights:
+        logger.info("workflow=analyze request_id=%s step=ai_summary_content summary=%s", request_id, insights[0])
+
     elapsed_ms = int((time.perf_counter() - started_at) * 1000)
     logger.info(
         "workflow=analyze request_id=%s step=response_ready elapsed_ms=%d",
@@ -129,10 +199,7 @@ def analyze(payload: AnalyzeRequest) -> dict:
         "risk_score": 0,
         "risk_level": "low",
         "action": "none",
-        "insights": [
-            "Pattern detection is active.",
-            f"Detected log type: {log_profile['log_type']} (confidence {log_profile['confidence']}).",
-        ],
+        "insights": insights,
         "metadata": {
             "normalized_preview": normalized["text"][:80],
             "options": payload.options.model_dump(),
@@ -144,6 +211,7 @@ def analyze(payload: AnalyzeRequest) -> dict:
             "log_type": log_profile.get("log_type", "unknown"),
             "log_sub_type": log_profile.get("log_sub_type", "unknown"),
             "log_profile": log_profile,
+            "grouped_findings": (analyzer_result or {}).get("grouped_findings", {}),
         },
     }
 
@@ -239,6 +307,44 @@ async def analyze_upload(
         float(log_profile.get("confidence", 0.0)),
     )
 
+    analyzer_result: dict[str, Any] | None = None
+    if log_analysis:
+        logger.info("workflow=analyze_upload request_id=%s step=log_analyzer_started", request_id)
+        analyzer_result = analyze_log_lines(normalized.get("text", ""))
+        findings = analyzer_result.get("findings", findings)
+        log_profile = analyzer_result.get("log_profile", log_profile)
+        logger.info(
+            "workflow=analyze_upload request_id=%s step=log_analyzer_completed findings=%d",
+            request_id,
+            len(findings),
+        )
+
+    logger.info("workflow=analyze_upload request_id=%s step=ai_insights_started", request_id)
+    analyzer_context = analyzer_result or {
+        "line_count": normalized["metadata"].get("line_count", 0),
+        "findings": findings,
+        "grouped_findings": {},
+        "log_profile": log_profile,
+        "summary": {
+            "total_findings": len(findings),
+            "unique_lines_affected": len({int(item.get("line", 0)) for item in findings if int(item.get("line", 0)) > 0}),
+        },
+    }
+    insights = generate_insights(
+        {
+            "request_id": request_id,
+            "content_type": normalized["content_type"],
+            "analyzer": analyzer_context,
+        }
+    )
+    logger.info(
+        "workflow=analyze_upload request_id=%s step=ai_insights_completed insights=%d",
+        request_id,
+        len(insights),
+    )
+    if insights:
+        logger.info("workflow=analyze_upload request_id=%s step=ai_summary_content summary=%s", request_id, insights[0])
+
     elapsed_ms = int((time.perf_counter() - started_at) * 1000)
     logger.info(
         "workflow=analyze_upload request_id=%s step=response_ready elapsed_ms=%d",
@@ -253,10 +359,7 @@ async def analyze_upload(
         "risk_score": 0,
         "risk_level": "low",
         "action": "none",
-        "insights": [
-            "File upload has been parsed and pattern detection is active.",
-            f"Detected log type: {log_profile['log_type']} (confidence {log_profile['confidence']}).",
-        ],
+        "insights": insights,
         "metadata": {
             "file_name": normalized["metadata"].get("file_name"),
             "file_suffix": normalized["metadata"].get("file_suffix"),
@@ -269,5 +372,6 @@ async def analyze_upload(
             "log_type": log_profile.get("log_type", "unknown"),
             "log_sub_type": log_profile.get("log_sub_type", "unknown"),
             "log_profile": log_profile,
+            "grouped_findings": (analyzer_result or {}).get("grouped_findings", {}),
         },
     }

@@ -6,6 +6,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from backend.ai_insights import generate_insights
 from backend.log_analyzer import analyze_log_lines
 from backend.patterns import detect_patterns, identify_log_type
 
@@ -87,3 +88,22 @@ def test_gold_dataset_log_analyzer_summary() -> None:
     assert result["summary"]["total_findings"] == expected["total_findings"]
     assert result["summary"]["unique_lines_affected"] == expected["unique_lines_affected"]
     assert result["grouped_findings"]["by_severity"] == expected["by_severity"]
+
+
+def test_gold_dataset_ai_insights_fallback_quality(monkeypatch) -> None:
+    text, _ = _load_gold()
+    analyzer = analyze_log_lines(text)
+
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    insights = generate_insights(
+        {
+            "content_type": "logs",
+            "line_count": analyzer["line_count"],
+            "findings": analyzer["findings"],
+            "log_profile": analyzer["log_profile"],
+            "grouped_findings": analyzer["grouped_findings"],
+        }
+    )
+
+    assert len(insights) == 1
+    assert "GEMINI_API_KEY" in insights[0]

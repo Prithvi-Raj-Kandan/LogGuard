@@ -105,7 +105,7 @@ export default function App() {
       }
 
       // Send message to API
-      const response = await sendChatMessage(content, currentReport?.id);
+      const response = await sendChatMessage(content, currentReport?.id, currentReport, messages);
 
       // Add assistant response
       const assistantMessage: ChatMessage = {
