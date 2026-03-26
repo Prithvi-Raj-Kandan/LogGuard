@@ -33,11 +33,15 @@ try:
     from backend.log_analyzer import analyze_log_lines
     from backend.parser import ParserError, normalize_input
     from backend.patterns import detect_patterns_in_lines, identify_log_type
+    from backend.policy_engine import apply_policy
+    from backend.risk_engine import calculate_risk
 except ImportError:  # pragma: no cover - fallback for local execution from backend/
     from ai_insights import generate_chat_response, generate_insights
     from log_analyzer import analyze_log_lines
     from parser import ParserError, normalize_input
     from patterns import detect_patterns_in_lines, identify_log_type
+    from policy_engine import apply_policy
+    from risk_engine import calculate_risk
 
 
 class AnalyzeOptions(BaseModel):
@@ -159,6 +163,30 @@ def analyze(payload: AnalyzeRequest) -> dict:
             len(findings),
         )
 
+    logger.info("workflow=analyze request_id=%s step=risk_scoring_started", request_id)
+    risk_result = calculate_risk(findings)
+    logger.info(
+        "workflow=analyze request_id=%s step=risk_scoring_completed risk_score=%d risk_level=%s",
+        request_id,
+        int(risk_result.get("risk_score", 0)),
+        str(risk_result.get("risk_level", "low")),
+    )
+
+    logger.info("workflow=analyze request_id=%s step=policy_engine_started", request_id)
+    policy_result = apply_policy(
+        normalized.get("text", ""),
+        findings,
+        payload.options.mask,
+        block_high_risk=payload.options.block_high_risk,
+        risk_level=str(risk_result.get("risk_level", "low")),
+    )
+    logger.info(
+        "workflow=analyze request_id=%s step=policy_engine_completed action=%s warnings=%d",
+        request_id,
+        str(policy_result.get("action", "none")),
+        len(policy_result.get("warnings", [])),
+    )
+
     logger.info("workflow=analyze request_id=%s step=ai_insights_started", request_id)
     analyzer_context = analyzer_result or {
         "line_count": normalized["metadata"].get("line_count", 0),
@@ -196,22 +224,24 @@ def analyze(payload: AnalyzeRequest) -> dict:
         "summary": "LG-103 detection response.",
         "content_type": normalized["content_type"],
         "findings": findings,
-        "risk_score": 0,
-        "risk_level": "low",
-        "action": "none",
+        "risk_score": int(risk_result.get("risk_score", 0)),
+        "risk_level": str(risk_result.get("risk_level", "low")),
+        "action": str(policy_result.get("action", "none")),
         "insights": insights,
+        "processed_content": str(policy_result.get("processed_content", normalized.get("text", ""))),
         "metadata": {
             "normalized_preview": normalized["text"][:80],
             "options": payload.options.model_dump(),
             "line_count": normalized["metadata"].get("line_count", 0),
             "chunk_count": normalized["metadata"].get("chunk_count", 0),
-            "warnings": normalized.get("warnings", []),
+            "warnings": normalized.get("warnings", []) + list(policy_result.get("warnings", [])),
             "request_id": request_id,
             "processing_time_ms": elapsed_ms,
             "log_type": log_profile.get("log_type", "unknown"),
             "log_sub_type": log_profile.get("log_sub_type", "unknown"),
             "log_profile": log_profile,
             "grouped_findings": (analyzer_result or {}).get("grouped_findings", {}),
+            "risk_breakdown": risk_result.get("breakdown", {}),
         },
     }
 
@@ -319,6 +349,30 @@ async def analyze_upload(
             len(findings),
         )
 
+    logger.info("workflow=analyze_upload request_id=%s step=risk_scoring_started", request_id)
+    risk_result = calculate_risk(findings)
+    logger.info(
+        "workflow=analyze_upload request_id=%s step=risk_scoring_completed risk_score=%d risk_level=%s",
+        request_id,
+        int(risk_result.get("risk_score", 0)),
+        str(risk_result.get("risk_level", "low")),
+    )
+
+    logger.info("workflow=analyze_upload request_id=%s step=policy_engine_started", request_id)
+    policy_result = apply_policy(
+        normalized.get("text", ""),
+        findings,
+        mask,
+        block_high_risk=block_high_risk,
+        risk_level=str(risk_result.get("risk_level", "low")),
+    )
+    logger.info(
+        "workflow=analyze_upload request_id=%s step=policy_engine_completed action=%s warnings=%d",
+        request_id,
+        str(policy_result.get("action", "none")),
+        len(policy_result.get("warnings", [])),
+    )
+
     logger.info("workflow=analyze_upload request_id=%s step=ai_insights_started", request_id)
     analyzer_context = analyzer_result or {
         "line_count": normalized["metadata"].get("line_count", 0),
@@ -356,16 +410,17 @@ async def analyze_upload(
         "summary": "LG-103 detection response via file upload endpoint.",
         "content_type": normalized["content_type"],
         "findings": findings,
-        "risk_score": 0,
-        "risk_level": "low",
-        "action": "none",
+        "risk_score": int(risk_result.get("risk_score", 0)),
+        "risk_level": str(risk_result.get("risk_level", "low")),
+        "action": str(policy_result.get("action", "none")),
         "insights": insights,
+        "processed_content": str(policy_result.get("processed_content", normalized.get("text", ""))),
         "metadata": {
             "file_name": normalized["metadata"].get("file_name"),
             "file_suffix": normalized["metadata"].get("file_suffix"),
             "line_count": normalized["metadata"].get("line_count", 0),
             "chunk_count": normalized["metadata"].get("chunk_count", 0),
-            "warnings": normalized.get("warnings", []),
+            "warnings": normalized.get("warnings", []) + list(policy_result.get("warnings", [])),
             "options": options,
             "request_id": request_id,
             "processing_time_ms": elapsed_ms,
@@ -373,5 +428,6 @@ async def analyze_upload(
             "log_sub_type": log_profile.get("log_sub_type", "unknown"),
             "log_profile": log_profile,
             "grouped_findings": (analyzer_result or {}).get("grouped_findings", {}),
+            "risk_breakdown": risk_result.get("breakdown", {}),
         },
     }

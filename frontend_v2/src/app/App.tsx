@@ -139,10 +139,7 @@ export default function App() {
         <div className="max-w-[1800px] mx-auto px-6 py-4">
           <div className="flex items-center gap-3">
             <Terminal className="w-6 h-6 text-[#8b5cf6]" />
-            <h1 className="font-mono text-xl">Log Analyzer Platform</h1>
-            <span className="px-2 py-1 text-xs bg-[#8b5cf6]/20 text-[#8b5cf6] rounded font-mono">
-              TERMINAL
-            </span>
+            <h1 className="font-mono text-xl">LogGuard 👾</h1>
           </div>
         </div>
       </header>
