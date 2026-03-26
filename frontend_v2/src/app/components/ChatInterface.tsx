@@ -107,7 +107,7 @@ export function ChatInterface({ messages, onSendMessage, isProcessing }: ChatInt
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about the log analysis..."
+            placeholder="Upload log files / Paste log lines in the chat"
             disabled={isProcessing}
             rows={2}
             className="flex-1 resize-none bg-[#1a1a1a] text-[#e0e0e0] border border-[#2a2a2a] rounded-lg px-4 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#8b5cf6] placeholder:text-[#666] disabled:opacity-50"

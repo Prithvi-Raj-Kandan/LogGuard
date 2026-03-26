@@ -2,25 +2,18 @@
 
 AI Secure Data Intelligence Platform for log ingestion, detection, analysis, risk scoring, policy enforcement, and AI-assisted security insights.
 
+LogGuard helps teams inspect logs and other text-like inputs for sensitive data exposure and security risks.
+It combines deterministic pattern detection with AI-generated summaries so users can quickly understand what was found and what to do next. 
+The platform provides a chat interface for the user to interact and make queries with respect to the log files.
+
 ## Features
 
-- Multi-input ingestion and normalization for text, file, sql, chat, and log payloads
-- File parsing support for txt, log, pdf, docx, and legacy doc fallback extraction
-- Structured parser metadata including line counts, chunk counts, extraction method, and warnings
-- Regex-based sensitive data detection with line references and confidence values
-- Detection coverage for emails, phone numbers, passwords, API keys, bearer tokens, JWTs, private keys, AWS keys, connection strings, stack traces, internal IPs, and hostnames
-- Deterministic risk labels and redaction hints per detected pattern
-- Log-type classification (web access, web error, linux syslog, application JSON, database, container/kubernetes)
-- Line-by-line log analyzer with evidence snippets and grouped summaries by type and severity
-- Weighted risk scoring engine with risk level classification and severity breakdown
-- Policy engine for masking sensitive values using redaction rules
-- Optional high-risk blocking action when policy mode enables block_high_risk
-- AI summary generation using Gemini based on analyzer context and metadata
-- AI chat assistant endpoint using report context plus recent chat history
-- Interactive log viewer with severity-aware highlighting support
-- Unified Security Warnings panel grouped by severity with expandable sections
-- AI Summary panel 
-- Frontend handling of policy-processed content so masked/blocked output is reflected in displayed logs
+- Multi-input parsing and normalization for text, logs, files, SQL, and chat payloads
+- Security pattern detection with line-aware findings, confidence, risk labels, and redaction hints
+- Log analysis pipeline with type classification, grouped findings, and severity summaries
+- Risk and policy enforcement with weighted scoring, masking, warnings, and optional blocking mode
+- AI-assisted analysis using Gemini for contextual summary and follow-up chat responses
+- End-to-end web experience with upload, log viewer, chat interface, severity-grouped warnings, and insights panels
 
 ## Architecture
 

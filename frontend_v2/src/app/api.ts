@@ -36,7 +36,17 @@ const viteEnv = (import.meta as ImportMeta & {
   env?: Record<string, string | undefined>;
 }).env;
 
-const FASTAPI_BASE_URL = viteEnv?.VITE_API_BASE_URL?.trim() || 'http://localhost:8000';
+function resolveApiBaseUrl(rawValue?: string): string {
+  const raw = (rawValue || '').trim();
+  if (!raw) {
+    return 'http://localhost:8000';
+  }
+
+  const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  return withProtocol.replace(/\/+$/, '');
+}
+
+const FASTAPI_BASE_URL = resolveApiBaseUrl(viteEnv?.VITE_API_BASE_URL);
 
 function buildRiskBreakdown(findings: BackendFinding[]) {
   return findings.reduce(

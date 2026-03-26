@@ -137,9 +137,14 @@ export default function App() {
       {/* Header */}
       <header className="border-b border-[#2a2a2a] bg-[#0d0d0d]">
         <div className="max-w-[1800px] mx-auto px-6 py-4">
-          <div className="flex items-center gap-3">
-            <Terminal className="w-6 h-6 text-[#8b5cf6]" />
-            <h1 className="font-mono text-xl">LogGuard 👾</h1>
+          <div className="flex items-start gap-3">
+            <Terminal className="w-6 h-6 text-[#8b5cf6] mt-1" />
+            <div>
+              <h1 className="font-mono text-xl">LogGuard 👾</h1>
+              <p className="text-xs text-[#9ca3af] font-mono mt-1">
+                Detect sensitive data leaks in logs and get actionable AI security insights.
+              </p>
+            </div>
           </div>
         </div>
       </header>
@@ -195,7 +200,7 @@ export default function App() {
       <footer className="border-t border-[#2a2a2a] bg-[#0d0d0d] mt-12">
         <div className="max-w-[1800px] mx-auto px-6 py-4">
           <p className="text-xs text-[#666] font-mono text-center">
-            Log Analyzer Platform • FastAPI Backend Integration Ready
+            LogGuard. All rights reserved.
           </p>
         </div>
       </footer>
