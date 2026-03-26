@@ -17,17 +17,10 @@ AI Secure Data Intelligence Platform for log ingestion, detection, analysis, ris
 - Optional high-risk blocking action when policy mode enables block_high_risk
 - AI summary generation using Gemini based on analyzer context and metadata
 - AI chat assistant endpoint using report context plus recent chat history
-- Graceful non-AI fallback behavior when Gemini configuration is missing or unavailable
-- Backend workflow logging for major processing stages and request tracing
-- FastAPI endpoints for health checks, text analyze, upload analyze, and chat
-- Frontend upload flow for log files and pasted text analysis
 - Interactive log viewer with severity-aware highlighting support
 - Unified Security Warnings panel grouped by severity with expandable sections
-- Risk visualization integrated into warning severity buckets
-- AI Summary panel with scrollable long-form output rendering
+- AI Summary panel 
 - Frontend handling of policy-processed content so masked/blocked output is reflected in displayed logs
-- Automated backend test coverage for parser, patterns, log analyzer, AI insights, risk/policy behavior, and evaluation metrics
-- Gold dataset evaluation tests for precision/recall thresholds and line-level detection quality
 
 ## Architecture
 
