@@ -43,7 +43,7 @@ def test_generate_insights_uses_model_when_available(monkeypatch) -> None:
     monkeypatch.setenv("GEMINI_MODEL", "gemini-test-model")
 
     def fake_call(prompt: str, api_key: str, model_name: str, timeout_seconds: float) -> str:
-        assert "security analyst" in prompt.lower()
+        assert "logguard security assistant" in prompt.lower()
         assert api_key == "dummy-key"
         assert model_name == "gemini-test-model"
         assert timeout_seconds > 0

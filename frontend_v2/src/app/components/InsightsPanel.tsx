@@ -22,7 +22,7 @@ export function InsightsPanel({ report }: InsightsPanelProps) {
             AI Summary
           </h3>
         </div>
-        <div className="p-4">
+        <div className="p-4 max-h-[260px] overflow-y-auto">
           <p className="text-[#a0a0a0] font-mono text-sm whitespace-pre-line leading-relaxed">
             {report.aiSummary}
           </p>

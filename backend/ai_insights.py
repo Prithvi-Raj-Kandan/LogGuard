@@ -12,11 +12,11 @@ DEFAULT_GEMINI_MODEL = "gemini-1.5-flash"
 def _build_prompt(context: dict[str, Any]) -> str:
     compact_json = json.dumps(context, ensure_ascii=True, separators=(",", ":"))
     return (
-        "You are a security analyst for logs. "
-        "Use the provided analyzer context and return a complete security summary. "
-        "Include key risks, affected lines or patterns, and concrete remediation steps. "
-        "The response can be paragraph or bullet points."
-        "\nAnalyzer context JSON:\n"
+        "Role: LogGuard security assistant. "
+        "Action: Generate a security analysis summary of the logs the user submitted. "
+        "Use the provided analyzer context and metadata to generate the summary. "
+        "Return plain text only and complete your response in full sentences."
+        "\nAnalyzer context: "
         f"{compact_json}"
     )
 
@@ -27,7 +27,8 @@ def _build_chat_prompt(message: str, report: dict[str, Any] | None, history: lis
     return (
         "You are LogGuard security assistant. "
         "Answer the user question using the provided report context and conversation history. "
-        "Be specific, reference concrete findings where possible, and avoid generic advice."
+        "Be specific, reference concrete findings where possible, and avoid generic advice. "
+        "Return plain text only. Do not use markdown characters like ** or headings."
         "\nConversation history JSON:\n"
         f"{history_json}"
         "\nReport context JSON:\n"
@@ -35,6 +36,11 @@ def _build_chat_prompt(message: str, report: dict[str, Any] | None, history: lis
         "\nUser question:\n"
         f"{message}"
     )
+
+
+def _clean_model_output(text: str) -> str:
+    cleaned = text.replace("**", "").replace("__", "").strip()
+    return cleaned
 
 
 def _call_gemini(prompt: str, api_key: str, model_name: str, timeout_seconds: float) -> str:
@@ -51,7 +57,7 @@ def _call_gemini(prompt: str, api_key: str, model_name: str, timeout_seconds: fl
         contents=prompt,
         config=types.GenerateContentConfig(
             temperature=0.2,
-            max_output_tokens=900,
+            max_output_tokens=1400,
         ),
     )
 
@@ -76,7 +82,7 @@ def generate_insights(context: dict[str, Any]) -> list[str]:
     try:
         logger.info("workflow=ai_insights step=model_call_started model=%s", model_name)
         raw = _call_gemini(prompt, api_key, model_name, timeout_seconds=10.0)
-        summary = raw.strip()
+        summary = _clean_model_output(raw)
         if not summary:
             raise ValueError("empty_model_response")
         logger.info("workflow=ai_insights step=model_call_completed model=%s", model_name)
@@ -106,7 +112,7 @@ def generate_chat_response(
     try:
         logger.info("workflow=chat_llm step=model_call_started model=%s", model_name)
         raw = _call_gemini(prompt, api_key, model_name, timeout_seconds=10.0)
-        answer = raw.strip()
+        answer = _clean_model_output(raw)
         if not answer:
             raise ValueError("empty_model_response")
         logger.info("workflow=chat_llm step=model_call_completed model=%s", model_name)
