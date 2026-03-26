@@ -29,12 +29,12 @@ if not logger.handlers:
 logger.setLevel(logging.INFO)
 
 try:
-    from backend.ai_insights import generate_insights
+    from backend.ai_insights import generate_chat_response, generate_insights
     from backend.log_analyzer import analyze_log_lines
     from backend.parser import ParserError, normalize_input
     from backend.patterns import detect_patterns_in_lines, identify_log_type
 except ImportError:  # pragma: no cover - fallback for local execution from backend/
-    from ai_insights import generate_insights
+    from ai_insights import generate_chat_response, generate_insights
     from log_analyzer import analyze_log_lines
     from parser import ParserError, normalize_input
     from patterns import detect_patterns_in_lines, identify_log_type
@@ -58,66 +58,7 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1)
     report_id: str | None = None
     report: dict[str, Any] | None = None
-
-
-def _build_chat_response(message: str, report: dict[str, Any] | None) -> str:
-    query = message.lower()
-    if not report:
-        return "I do not have report context yet. Upload a log file first, then ask follow-up questions."
-
-    warnings = report.get("warnings", []) if isinstance(report, dict) else []
-    risk_breakdown = report.get("riskBreakdown", {}) if isinstance(report, dict) else {}
-
-    if not warnings:
-        return "No warnings were found in the current report, so there is no critical breach to prioritize."
-
-    sorted_warnings = sorted(
-        warnings,
-        key=lambda item: {
-            "critical": 4,
-            "high": 3,
-            "medium": 2,
-            "low": 1,
-        }.get(str(item.get("severity", "low")).lower(), 0),
-        reverse=True,
-    )
-
-    if "most critical" in query or "critical security breach" in query or "highest risk" in query:
-        top = sorted_warnings[0]
-        lines = top.get("lineNumbers", [])
-        line_text = f" at line {', '.join(str(item) for item in lines)}" if lines else ""
-        return (
-            f"The most critical issue is {top.get('type', 'unknown')} "
-            f"({top.get('severity', 'critical')}){line_text}. "
-            "Prioritize immediate credential rotation and redaction."
-        )
-
-    if "3 critical" in query or "three critical" in query or "top 3" in query:
-        top_three = sorted_warnings[:3]
-        details = []
-        for index, warning in enumerate(top_three, start=1):
-            lines = warning.get("lineNumbers", [])
-            line_text = f"line {', '.join(str(item) for item in lines)}" if lines else "line unknown"
-            details.append(
-                f"{index}. {warning.get('type', 'unknown')} ({warning.get('severity', 'low')}) on {line_text}"
-            )
-        return "Top 3 highest-priority warnings:\n" + "\n".join(details)
-
-    if "summary" in query or "risk breakdown" in query or "overview" in query:
-        return (
-            "Risk summary: "
-            f"critical={risk_breakdown.get('critical', 0)}, "
-            f"high={risk_breakdown.get('high', 0)}, "
-            f"medium={risk_breakdown.get('medium', 0)}, "
-            f"low={risk_breakdown.get('low', 0)}. "
-            f"Total warnings={len(warnings)}."
-        )
-
-    top = sorted_warnings[0]
-    return (
-        "I am using the uploaded report context. "
-        f"Start with {top.get('type', 'unknown')} ({top.get('severity', 'low')}) and I can walk you through all findings."
-    )
+    history: list[dict[str, str]] | None = None
 
 
 app = FastAPI(
@@ -144,12 +85,13 @@ def health() -> dict[str, str]:
 @app.post("/chat")
 def chat(payload: ChatRequest) -> dict[str, str]:
     logger.info(
-        "workflow=chat step=request_received message_length=%d has_report=%s report_id=%s",
+        "workflow=chat step=request_received message_length=%d has_report=%s report_id=%s history_count=%d",
         len(payload.message),
         bool(payload.report),
         payload.report_id or "none",
+        len(payload.history or []),
     )
-    response = _build_chat_response(payload.message, payload.report)
+    response = generate_chat_response(payload.message, payload.report, payload.history)
     logger.info("workflow=chat step=response_ready response_length=%d", len(response))
     return {"response": response}
 
@@ -218,14 +160,21 @@ def analyze(payload: AnalyzeRequest) -> dict:
         )
 
     logger.info("workflow=analyze request_id=%s step=ai_insights_started", request_id)
+    analyzer_context = analyzer_result or {
+        "line_count": normalized["metadata"].get("line_count", 0),
+        "findings": findings,
+        "grouped_findings": {},
+        "log_profile": log_profile,
+        "summary": {
+            "total_findings": len(findings),
+            "unique_lines_affected": len({int(item.get("line", 0)) for item in findings if int(item.get("line", 0)) > 0}),
+        },
+    }
     insights = generate_insights(
         {
             "request_id": request_id,
             "content_type": normalized["content_type"],
-            "line_count": normalized["metadata"].get("line_count", 0),
-            "findings": findings,
-            "log_profile": log_profile,
-            "grouped_findings": (analyzer_result or {}).get("grouped_findings", {}),
+            "analyzer": analyzer_context,
         }
     )
     logger.info(
@@ -233,6 +182,8 @@ def analyze(payload: AnalyzeRequest) -> dict:
         request_id,
         len(insights),
     )
+    if insights:
+        logger.info("workflow=analyze request_id=%s step=ai_summary_content summary=%s", request_id, insights[0])
 
     elapsed_ms = int((time.perf_counter() - started_at) * 1000)
     logger.info(
@@ -369,14 +320,21 @@ async def analyze_upload(
         )
 
     logger.info("workflow=analyze_upload request_id=%s step=ai_insights_started", request_id)
+    analyzer_context = analyzer_result or {
+        "line_count": normalized["metadata"].get("line_count", 0),
+        "findings": findings,
+        "grouped_findings": {},
+        "log_profile": log_profile,
+        "summary": {
+            "total_findings": len(findings),
+            "unique_lines_affected": len({int(item.get("line", 0)) for item in findings if int(item.get("line", 0)) > 0}),
+        },
+    }
     insights = generate_insights(
         {
             "request_id": request_id,
             "content_type": normalized["content_type"],
-            "line_count": normalized["metadata"].get("line_count", 0),
-            "findings": findings,
-            "log_profile": log_profile,
-            "grouped_findings": (analyzer_result or {}).get("grouped_findings", {}),
+            "analyzer": analyzer_context,
         }
     )
     logger.info(
@@ -384,6 +342,8 @@ async def analyze_upload(
         request_id,
         len(insights),
     )
+    if insights:
+        logger.info("workflow=analyze_upload request_id=%s step=ai_summary_content summary=%s", request_id, insights[0])
 
     elapsed_ms = int((time.perf_counter() - started_at) * 1000)
     logger.info(

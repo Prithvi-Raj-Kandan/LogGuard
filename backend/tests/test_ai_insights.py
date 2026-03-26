@@ -34,8 +34,8 @@ def test_generate_insights_fallback_without_api_key(monkeypatch) -> None:
 
     insights = generate_insights(_sample_context())
 
-    assert len(insights) >= 3
-    assert any("log profile" in item.lower() for item in insights)
+    assert len(insights) == 1
+    assert "GEMINI_API_KEY" in insights[0]
 
 
 def test_generate_insights_uses_model_when_available(monkeypatch) -> None:
@@ -47,14 +47,14 @@ def test_generate_insights_uses_model_when_available(monkeypatch) -> None:
         assert api_key == "dummy-key"
         assert model_name == "gemini-test-model"
         assert timeout_seconds > 0
-        return "- Rotate exposed credentials immediately\n- Restrict access to log exports\n- Add masking on high-risk fields"
+        return "Rotate exposed credentials immediately. Restrict access to log exports."
 
     monkeypatch.setattr("backend.ai_insights._call_gemini", fake_call)
 
     insights = generate_insights(_sample_context())
 
-    assert len(insights) == 3
-    assert insights[0] == "Rotate exposed credentials immediately"
+    assert len(insights) == 1
+    assert insights[0].startswith("Rotate exposed credentials immediately")
 
 
 def test_generate_insights_falls_back_on_model_error(monkeypatch) -> None:
@@ -67,5 +67,5 @@ def test_generate_insights_falls_back_on_model_error(monkeypatch) -> None:
 
     insights = generate_insights(_sample_context())
 
-    assert len(insights) >= 3
-    assert any("redaction" in item.lower() for item in insights)
+    assert len(insights) == 1
+    assert "model call failed" in insights[0].lower()

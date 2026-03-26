@@ -105,5 +105,5 @@ def test_gold_dataset_ai_insights_fallback_quality(monkeypatch) -> None:
         }
     )
 
-    assert len(insights) >= 3
-    assert all(item.strip() for item in insights)
+    assert len(insights) == 1
+    assert "GEMINI_API_KEY" in insights[0]
