@@ -5,6 +5,7 @@ AI Secure Data Intelligence Platform for log ingestion, detection, analysis, ris
 LogGuard helps teams inspect logs and other text-like inputs for sensitive data exposure and security risks.
 It combines deterministic pattern detection with AI-generated summaries so users can quickly understand what was found and what to do next. 
 The platform provides a chat interface for the user to interact and make queries with respect to the log files.
+Link: https://log-guard-silk.vercel.app/
 
 ## Features
 
