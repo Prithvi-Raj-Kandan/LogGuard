@@ -1,0 +1,33 @@
+# Git and editor metadata
+.git
+.gitignore
+.vscode
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Environment files
+.env
+.env.*
+
+# Test and coverage artifacts
+.coverage
+htmlcov/
+
+# Build outputs
+build/
+dist/
+*.egg-info/
+
+# Frontend dependencies and builds
+frontend_v2/node_modules/
+frontend_v2/dist/
+
+# Logs
+*.log
